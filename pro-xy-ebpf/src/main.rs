@@ -3,20 +3,15 @@
 
 use aya_bpf::{bindings::xdp_action, macros::xdp, programs::XdpContext};
 use aya_bpf::{macros::socket_filter, programs::SkBuffContext};
-use aya_log_ebpf::info;
-
+use memoffset::offset_of;
 mod bindings;
 
 use bindings::{ethhdr, iphdr, udphdr};
 use core::mem;
+use aya_log_ebpf::info;
 
 const IPPROTO_UDP: u8 = 0x0011;
 const ETH_P_IP: u16 = 0x0800;
-
-const ETH_HLEN: usize = core::mem::size_of::<ethhdr>();
-const IP_HLEN: usize = core::mem::size_of::<iphdr>();
-const UDP_HLEN: usize = core::mem::size_of::<udphdr>();
-
 const ETH_HDR_LEN: usize = mem::size_of::<ethhdr>();
 const IP_HDR_LEN: usize = mem::size_of::<iphdr>();
 
@@ -27,6 +22,42 @@ pub fn pro_xy_xdp(ctx: XdpContext) -> u32 {
         Err(_) => xdp_action::XDP_ABORTED,
     }
 }
+
+#[socket_filter]
+pub fn pro_xy_filter(_ctx: SkBuffContext) -> i64 {
+    let eth_proto = u16::from_be(
+        _ctx.load(offset_of!(ethhdr, h_proto))
+            .unwrap(),
+    );
+    let ip_proto = _ctx
+        .load::<u8>(
+            ETH_HDR_LEN + offset_of!(iphdr, protocol),
+        )
+        .unwrap();
+
+    if eth_proto != ETH_P_IP {
+        return 0;
+    }
+    // let eth: ethhdr = _ctx.load(0).unwrap();
+    //
+    // if unsafe { u16::from_be((eth).h_proto) } != ETH_P_IP {
+    //     return 0;
+    // }
+    // let ip: iphdr = unsafe {
+    //     _ctx.load(IP_HDR_LEN).unwrap()
+    // };
+    // if unsafe { u8::from_be((ip).protocol) } != IPPROTO_UDP {
+    //     return 0;
+    // }
+    // let udp: udphdr = unsafe {
+    //     _ctx.load(ETH_HDR_LEN + IP_HDR_LEN).unwrap()
+    // };
+    // if unsafe { u16::from_be((udp).source) } == 53 || unsafe { u16::from_be((udp).dest) } == 53 {
+    //     return 1;
+    // }
+    return 0;
+}
+
 
 fn try_pro_xy(ctx: XdpContext) -> Result<u32, u32> {
     info!(&ctx, "received a packet");
@@ -49,11 +80,6 @@ fn try_pro_xy(ctx: XdpContext) -> Result<u32, u32> {
     Ok(xdp_action::XDP_PASS)
 }
 
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    unsafe { core::hint::unreachable_unchecked() }
-}
-
 #[inline(always)]
 fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Option<*const T> {
     let start = ctx.data();
@@ -73,25 +99,8 @@ fn ptr_at_mut<T>(ctx: &XdpContext, offset: usize) -> Option<*mut T> {
     Some(ptr as *mut T)
 }
 
-#[socket_filter]
-pub fn pro_xy_filter(_ctx: SkBuffContext) -> i64 {
-    let eth: ethhdr = unsafe {
-        _ctx.load(0).unwrap()
-    };
-    if unsafe { u16::from_be((eth).h_proto) } != ETH_P_IP {
-        return 0;
-    }
-    let ip: iphdr = unsafe {
-        _ctx.load(IP_HDR_LEN).unwrap()
-    };
-    if unsafe { u8::from_be((ip).protocol) } != IPPROTO_UDP {
-        return 0;
-    }
-    let udp: udphdr = unsafe {
-        _ctx.load(ETH_HDR_LEN + IP_HDR_LEN).unwrap()
-    };
-    if unsafe { u16::from_be((udp).source) } == 53 || unsafe { u16::from_be((udp).dest) } == 53 {
-        return 1;
-    }
-    return 0;
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    unsafe { core::hint::unreachable_unchecked() }
 }

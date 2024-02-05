@@ -8,6 +8,7 @@ flex-dns = "1.0.1"
 aya-bpf = { git = "https://github.com/aya-rs/aya" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya" }
 pro-xy-common = { path = "../pro-xy-common" }
+memoffset = "0.9.0"
 
 [[bin]]
 name = "pro-xy"
